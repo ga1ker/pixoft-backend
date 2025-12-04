@@ -1,6 +1,8 @@
 const db = require('../db');
 const nodemailer = require('nodemailer');
 require('dotenv').config();
+const bcrypt = require('bcrypt');
+
 const { DateTime } = require('luxon');
 
 const transporter = nodemailer.createTransport({
@@ -12,6 +14,12 @@ const transporter = nodemailer.createTransport({
     pass: process.env.EMAIL_PASS,
   },
 });
+
+async function getUsuarioByEmail(email) {
+    const query = 'SELECT id, first_name, last_name, email, password_hash, phone, created_at, role, is_active, last_login FROM users WHERE email = $1';
+    const { rows } = await db.query(query, [email]);
+    return rows[0] || null;
+}
 
 async function getAllUsuarios() {
   const { rows } = await db.query(
@@ -132,6 +140,36 @@ async function sendVerificationEmail(email, codigo, nombre) {
   await transporter.sendMail(mailOptions);
 }
 
+async function authenticateUser(email, password) {
+    const usuario = await getUsuarioByEmail(email);
+
+    if (!usuario) {
+        throw new Error("El usuario no existe");
+    }
+
+    if (!usuario.is_active) {
+        throw new Error("La cuenta no está activa. Por favor, verifica tu correo.");
+    }
+
+    const contrasena_valida = await bcrypt.compare(password, usuario.password_hash);
+
+    if (!contrasena_valida) {
+        throw new Error("Contraseña incorrecta");
+    }
+
+    await updateLastLogin(usuario.id_usuario);
+
+    const { contrasena_hash, ...usuarioSinHash } = usuario;
+    return usuarioSinHash;
+}
+
+async function updateLastLogin(id_usuario) {
+    const hoyCDMX = DateTime.now().setZone('America/Mexico_City');
+    const hoy = hoyCDMX.toISO();
+    const query = `UPDATE users SET last_login = $1 WHERE id = $2`;
+    await db.query(query, [hoy, id_usuario]);
+}
+
 module.exports = {
   getAllUsuarios,
   createUsuario,
@@ -139,5 +177,7 @@ module.exports = {
   saveVerificationCode,
   verifyCode,
   activateUser,
-  sendVerificationEmail
+  sendVerificationEmail,
+  authenticateUser,
+  updateLastLogin
 };

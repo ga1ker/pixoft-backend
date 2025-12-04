@@ -86,4 +86,29 @@ router.post('/verify-email', async (req, res) => {
   }
 });
 
+router.post("/login", async (req, res) => {
+    const { email, password } = req.body;
+    try {
+        const usuarioAutenticado = await usuarioService.authenticateUser(email, password);
+
+        const token = jwt.sign(
+            { id_usuario: usuarioAutenticado.id_usuario, rol: usuarioAutenticado.rol },
+            process.env.JWT_SECRET,
+            { expiresIn: '168h' } 
+        );
+
+        res.status(200).json({ message: "Inicio de sesión exitoso", usuario: usuarioAutenticado, token: token, success: true });
+
+    } catch (err) {
+        console.error(err);
+        if (err.message === "El usuario no existe" || err.message === "Contraseña incorrecta") {
+            return res.status(401).send(err.message);
+        }
+        if (err.message === "La cuenta no está activa. Por favor, verifica tu correo.") {
+            return res.status(403).send(err.message);
+        }
+        res.status(500).send("Error interno del servidor al iniciar sesión.");
+    }
+});
+
 module.exports = router;

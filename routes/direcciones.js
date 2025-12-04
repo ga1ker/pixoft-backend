@@ -1,154 +1,10 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../db');
-//const { verifyToken } = require('../middleware/auth');
-
-router.post('/test-crear', async (req, res) => {
-//test de crear rutas:router.post('/test-crear', async (req, res) => {
-    console.log('\n🔧 === PRUEBA CREACIÓN DIRECCIÓN ===');
-    console.log('📦 Body recibido:', JSON.stringify(req.body, null, 2));
-
-    if (!req.body || typeof req.body !== 'object') {
-        console.error('❌ ERROR CRÍTICO: req.body es undefined o no es objeto');
-        return res.status(400).json({
-            error: 'Cuerpo de la solicitud inválido',
-            mensaje: 'El cuerpo debe ser un objeto JSON válido',
-            solucion: 'Asegúrate de enviar Content-Type: application/json'
-        });
-    }
-    
-    // Para pruebas, usar un usuario_id fijo (ej: 1)
-    // En producción, esto vendría del token: req.user.id_usuario
-    const usuario_id = 1; 
-    
-    console.log(`👤 Usuario ID (hardcodeado para prueba): ${usuario_id}`);
-    
-    const { 
-        alias, 
-        calle, 
-        numero_exterior, 
-        numero_interior, 
-        colonia, 
-        ciudad, 
-        estado, 
-        codigo_postal, 
-        pais = 'México', 
-        entre_calles, 
-        referencia, 
-        es_principal = false, 
-        es_facturacion = false 
-    } = req.body;
-
-    // Validar campos obligatorios
-    console.log('🔍 Validando campos obligatorios...');
-    const camposObligatorios = ['calle', 'numero_exterior', 'ciudad', 'estado', 'codigo_postal'];
-    const camposFaltantes = camposObligatorios.filter(campo => !req.body[campo]);
-    
-    if (camposFaltantes.length > 0) {
-        console.log('❌ Campos faltantes:', camposFaltantes);
-        return res.status(400).json({ 
-            error: 'Faltan campos obligatorios',
-            campos_faltantes: camposFaltantes,
-            mensaje: `Faltan: ${camposFaltantes.join(', ')}`
-        });
-    }
-    
-    console.log('✅ Validación de campos exitosa');
-
-    const client = await db.connect();
-    console.log('🔌 Conexión a DB establecida');
-    
-    try {
-        await client.query('BEGIN');
-        console.log('🔄 Transacción iniciada');
-
-        // Si es principal, quitar el estado de principal de las demás direcciones
-        if (es_principal) {
-            console.log('⭐ Marcando como PRINCIPAL - actualizando otras...');
-            const updateResult = await client.query(
-                `UPDATE direcciones
-                 SET es_principal = FALSE
-                 WHERE usuario_id = $1`,
-                [usuario_id]
-            );
-            console.log(`📊 Direcciones afectadas (no-principal): ${updateResult.rowCount}`);
-        }
-
-        // Si es facturación, quitar el estado de facturación de las demás direcciones
-        if (es_facturacion) {
-            console.log('🧾 Marcando como FACTURACIÓN - actualizando otras...');
-            const updateResult = await client.query(
-                `UPDATE direcciones
-                 SET es_facturacion = FALSE
-                 WHERE usuario_id = $1`,
-                [usuario_id]
-            );
-            console.log(`📊 Direcciones afectadas (no-facturación): ${updateResult.rowCount}`);
-        }
-
-        console.log('📝 Ejecutando INSERT...');
-        const result = await client.query(
-            `INSERT INTO direcciones (
-                usuario_id, alias, calle, numero_exterior, numero_interior, colonia, ciudad, estado, 
-                codigo_postal, pais, entre_calles, referencia, es_principal, es_facturacion
-             ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
-             RETURNING id, usuario_id, alias, calle, numero_exterior, numero_interior, colonia, 
-                       ciudad, estado, codigo_postal, pais, entre_calles, referencia, es_principal, es_facturacion`,
-            [
-                usuario_id, 
-                alias || null, 
-                calle, 
-                numero_exterior, 
-                numero_interior || null, 
-                colonia || null, 
-                ciudad, 
-                estado, 
-                codigo_postal, 
-                pais, 
-                entre_calles || null, 
-                referencia || null, 
-                es_principal, 
-                es_facturacion
-            ]
-        );
-
-        console.log(`✅ INSERT exitoso. ID generado: ${result.rows[0].id}`);
-        console.log('📄 Datos insertados:', JSON.stringify(result.rows[0], null, 2));
-
-        await client.query('COMMIT');
-        console.log('✅ Transacción confirmada (COMMIT)');
-        
-        res.status(201).json({ 
-            success: true,
-            message: '✅ Dirección creada exitosamente (PRUEBA)', 
-            direccion: result.rows[0],
-            debug: {
-                usuario_id_utilizado: usuario_id,
-                timestamp: new Date().toISOString()
-            }
-        });
-        
-    } catch (err) {
-        await client.query('ROLLBACK');
-        console.error('❌ ERROR en transacción:', err.message);
-        console.error('🔍 Detalles:', err);
-        
-        res.status(500).json({ 
-            success: false,
-            error: 'Error interno del servidor',
-            mensaje: err.message,
-            codigo: err.code,
-            detalle: err.detail || 'Sin detalles adicionales'
-        });
-    } finally {
-        client.release();
-        console.log('🔌 Conexión a DB liberada');
-        console.log('🎯 === FIN PRUEBA ===\n');
-    }
-});
+const { verifyToken } = require('../middleware/auth');
 
 // Obtener todas las direcciones del usuario
-router.get('/', async (req, res) => {
+router.get('/', verifyToken, async (req, res) => {
     const usuario_id = req.user.id_usuario;
 
     try {
@@ -168,10 +24,10 @@ router.get('/', async (req, res) => {
 });
 
 // Crear una nueva dirección
-router.post('/', async (req, res) => {
-
-    req.user = { id_usuario: 1 };
-    const usuario_id = req.user.id_usuario;
+router.post('/', verifyToken, async (req, res) => {
+    const id = req.user.id;
+    console.log("id del usuario" + req.user.id_usuario);
+    
     const { 
         alias, 
         calle, 
@@ -203,7 +59,7 @@ router.post('/', async (req, res) => {
                 `UPDATE direcciones
                  SET es_principal = FALSE
                  WHERE usuario_id = $1`,
-                [usuario_id]
+                [id]
             );
         }
 
@@ -213,7 +69,7 @@ router.post('/', async (req, res) => {
                 `UPDATE direcciones
                  SET es_facturacion = FALSE
                  WHERE usuario_id = $1`,
-                [usuario_id]
+                [id]
             );
         }
 
@@ -225,7 +81,7 @@ router.post('/', async (req, res) => {
              RETURNING id, usuario_id, alias, calle, numero_exterior, numero_interior, colonia, 
                        ciudad, estado, codigo_postal, pais, entre_calles, referencia, es_principal, es_facturacion`,
             [
-                usuario_id, 
+                id, 
                 alias || null, 
                 calle, 
                 numero_exterior, 
@@ -257,7 +113,7 @@ router.post('/', async (req, res) => {
 });
 
 // Actualizar una dirección existente
-router.put('/:id', async (req, res) => {
+router.put('/:id', verifyToken, async (req, res) => {
     const id = parseInt(req.params.id);
     const usuario_id = req.user.id_usuario;
     const { 
@@ -363,7 +219,7 @@ router.put('/:id', async (req, res) => {
 });
 
 // Eliminar una dirección
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', verifyToken, async (req, res) => {
     const id = parseInt(req.params.id);
     const usuario_id = req.user.id_usuario;
 
@@ -456,7 +312,7 @@ router.delete('/:id', async (req, res) => {
 });
 
 // Establecer dirección como principal
-router.put('/set-principal/:id', async (req, res) => {
+router.put('/set-principal/:id', verifyToken, async (req, res) => {
     const id = parseInt(req.params.id);
     const usuario_id = req.user.id_usuario;
 
@@ -511,7 +367,7 @@ router.put('/set-principal/:id', async (req, res) => {
 });
 
 // Establecer dirección como facturación
-router.put('/set-facturacion/:id', async (req, res) => {
+router.put('/set-facturacion/:id', verifyToken, async (req, res) => {
     const id = parseInt(req.params.id);
     const usuario_id = req.user.id_usuario;
 

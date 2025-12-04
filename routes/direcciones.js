@@ -5,7 +5,7 @@ const { verifyToken } = require('../middleware/auth');
 
 // Obtener todas las direcciones del usuario
 router.get('/', verifyToken, async (req, res) => {
-    const usuario_id = req.user.id_usuario;
+    const usuario_id = req.user.id;
 
     try {
         const result = await db.query(
@@ -26,7 +26,7 @@ router.get('/', verifyToken, async (req, res) => {
 // Crear una nueva dirección
 router.post('/', verifyToken, async (req, res) => {
     const id = req.user.id;
-    console.log("id del usuario" + req.user.id_usuario);
+    console.log("id del usuario" + req.user.id);
     
     const { 
         alias, 
@@ -115,7 +115,7 @@ router.post('/', verifyToken, async (req, res) => {
 // Actualizar una dirección existente
 router.put('/:id', verifyToken, async (req, res) => {
     const id = parseInt(req.params.id);
-    const usuario_id = req.user.id_usuario;
+    const usuario_id = req.user.id;
     const { 
         alias, 
         calle, 
@@ -221,7 +221,7 @@ router.put('/:id', verifyToken, async (req, res) => {
 // Eliminar una dirección
 router.delete('/:id', verifyToken, async (req, res) => {
     const id = parseInt(req.params.id);
-    const usuario_id = req.user.id_usuario;
+    const usuario_id = req.user.id;
 
     if (isNaN(id)) {
         return res.status(400).send('ID de dirección inválido.');
@@ -314,7 +314,7 @@ router.delete('/:id', verifyToken, async (req, res) => {
 // Establecer dirección como principal
 router.put('/set-principal/:id', verifyToken, async (req, res) => {
     const id = parseInt(req.params.id);
-    const usuario_id = req.user.id_usuario;
+    const usuario_id = req.user.id;
 
     if (isNaN(id)) {
         return res.status(400).send('ID de dirección inválido.');
@@ -369,7 +369,7 @@ router.put('/set-principal/:id', verifyToken, async (req, res) => {
 // Establecer dirección como facturación
 router.put('/set-facturacion/:id', verifyToken, async (req, res) => {
     const id = parseInt(req.params.id);
-    const usuario_id = req.user.id_usuario;
+    const usuario_id = req.user.id;
 
     if (isNaN(id)) {
         return res.status(400).send('ID de dirección inválido.');

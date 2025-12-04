@@ -3,6 +3,7 @@ const router = express.Router();
 const usuarioService = require('../services/usuarioService');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
+const { verifyToken, authorizeAdmin } = require('../middleware/auth');
 require('dotenv').config();
 
 router.get('/', async (req, res) => {
@@ -110,5 +111,21 @@ router.post("/login", async (req, res) => {
         res.status(500).send("Error interno del servidor al iniciar sesión.");
     }
 });
+
+router.post("/change-role", verifyToken, authorizeAdmin, async (req, res) => {
+    const { userId, newRole } = req.body;
+
+    if (!userId || !newRole) {
+        return res.status(400).json({ error: "Faltan ID de usuario o nuevo rol" });
+    }
+
+    try {
+        const result = await usuarioService.changeUserRole(userId, newRole);
+        res.json({ message: "Rol de usuario actualizado exitosamente", result });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: "Error interno del servidor al cambiar el rol" });
+    }
+})
 
 module.exports = router;

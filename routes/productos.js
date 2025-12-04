@@ -78,10 +78,11 @@ router.post("/agregar", async(req, res)=>{
         const marcaResult = await db.query(`
             SELECT id FROM marcas WHERE nombre = $1
             `, [marca])
-            
+
         const categoriaResult = await db.query(`
             SELECT id FROM categorias WHERE nombre = $1  
             `, [categoria])
+            
         if (marcaResult.rows.length === 0){
             const insertMarcaResult = await db.query(`
                 INSERT INTO marcas (nombre)

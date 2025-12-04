@@ -22,7 +22,9 @@ function verifyToken(req, res, next) {
 }
 
 function authorizeAdmin(req, res, next) {
-    if (!req.user || req.user.rol !== 'admin') {
+    console.log(req.user);
+    console.log(req.user.role);
+    if (!req.user || req.user.role != 'admin') {
         return res.status(403).send('Acceso denegado. Se requiere rol de administrador.');
     }
     next();
@@ -30,7 +32,7 @@ function authorizeAdmin(req, res, next) {
 
 function authorizeRoles(...allowedRoles) {
   return (req, res, next) => {
-    if (!req.user || !allowedRoles.includes(req.user.rol)) {
+    if (!req.user || !allowedRoles.includes(req.user.role)) {
       return res.status(403).send('Acceso denegado. No tienes los permisos necesarios.');
     }
     next();

@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const usuarioService = require('../services/usuarioService');
 const bcrypt = require('bcrypt');
+const db = require('../db');
 const jwt = require('jsonwebtoken');
 const { verifyToken, authorizeAdmin } = require('../middleware/auth');
 require('dotenv').config();
@@ -68,7 +69,7 @@ router.post('/verify-email', async (req, res) => {
       await usuarioService.activateUser(userId);
       
       const token = jwt.sign(
-        { id: userId, rol: 'cliente' },
+        { id: userId, role: 'cliente' },
         process.env.JWT_SECRET,
         { expiresIn: '7d' }
       );
@@ -93,7 +94,7 @@ router.post("/login", async (req, res) => {
         const usuarioAutenticado = await usuarioService.authenticateUser(email, password);
 
         const token = jwt.sign(
-            { id_usuario: usuarioAutenticado.id_usuario, rol: usuarioAutenticado.rol },
+            { id: usuarioAutenticado.id, role: usuarioAutenticado.role },
             process.env.JWT_SECRET,
             { expiresIn: '168h' } 
         );
@@ -113,6 +114,8 @@ router.post("/login", async (req, res) => {
 });
 
 router.post("/change-role", verifyToken, authorizeAdmin, async (req, res) => {
+    const id_usuario = req.user.id;
+    console.log("Usuario que intenta cambiar rol:", id_usuario);
     const { userId, newRole } = req.body;
 
     if (!userId || !newRole) {
@@ -120,7 +123,13 @@ router.post("/change-role", verifyToken, authorizeAdmin, async (req, res) => {
     }
 
     try {
-        const result = await usuarioService.changeUserRole(userId, newRole);
+        const result = await db.query(`
+            UPDATE users 
+            SET role = $1 
+            WHERE id = $2 
+            RETURNING id, first_name, last_name, email, role
+        `, [newRole, userId]);
+
         res.json({ message: "Rol de usuario actualizado exitosamente", result });
     } catch (err) {
         console.error(err);

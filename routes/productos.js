@@ -57,7 +57,7 @@ router.post("/agregar", async(req, res)=>{
       nombre,
       descripcion,
       caracteristicas,
-      categoria_id,
+      categoria,
       marca,
       precio,
       precio_descuento,
@@ -73,24 +73,42 @@ router.post("/agregar", async(req, res)=>{
       stock
     } = req.body;
     let idMarca;
+    let idCategoria;
     try{
         const marcaResult = await db.query(`
             SELECT id FROM marcas WHERE nombre = $1
             `, [marca])
+            
+        const categoriaResult = await db.query(`
+            SELECT id FROM categorias WHERE nombre = $1  
+            `, [categoria])
         if (marcaResult.rows.length === 0){
             const insertMarcaResult = await db.query(`
                 INSERT INTO marcas (nombre)
                 VALUES ($1)
                 RETURNING id;
                 `, [marca])
-            idMarca = insertMarcaResult.rows[0].id;
+            idMarca = insertMarcaResult.rows[0].id
         }else{
             idMarca = marcaResult.rows[0].id
+
+        }
+
+        if(categoriaResult.rows.length === 0){
+            const insertCategoriaResult = await db.query(`
+                INSERT INTO categorias (nombre)
+                VALUES ($1)
+                RETURNING id;
+                `, [categoria])
+            idCategoria = insertCategoriaResult.rows[0].id
+        }else{
+            idCategoria = categoriaResult.rows[0].id
         }
     }
     catch (error){
         console.log(error)
     }
+    
     console.log(idMarca)
     try{
 
@@ -113,7 +131,7 @@ router.post("/agregar", async(req, res)=>{
       nombre,
       descripcion,
       caracteristicas,
-      categoria_id,
+      idCategoria,
       idMarca,
       precio,
       precio_descuento,

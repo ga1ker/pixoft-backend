@@ -1,12 +1,14 @@
 const express = require('express');
 const cors = require('cors');
 const usuariosRoute = require('./routes/usuarios');
-const productosRoute = require('./routes/productos')
-const ventasRoute = require('./routes/ventas')
-const categoriasRoute = require('./routes/categorias')
-const marcasRoute = require('./routes/marcas')
+const productosRoute = require('./routes/productos');
+const ventasRoute = require('./routes/ventas');
+const categoriasRoute = require('./routes/categorias');
+const marcasRoute = require('./routes/marcas');
 const direccionesRoute = require('./routes/direcciones');
-const carritoRoute = require('./routes/carrito')
+const carritoRoute = require('./routes/carrito');
+const opinionesRoute = require('./routes/opiniones');
+const venta_detallesRoute = require('./routes/venta_detalles');
 
 const app = express();
 
@@ -22,9 +24,9 @@ app.use('/api/ventas', ventasRoute);
 app.use('/api/categorias', categoriasRoute);
 app.use('/api/marcas', marcasRoute);
 app.use('/api/carrito', carritoRoute);
-
-
+app.use('/api/opiniones', opinionesRoute);
 app.use('/api/direcciones', direccionesRoute);
+app.use('/api/venta_detalles', venta_detallesRoute);
 
 const PORT = process.env.PORT || 8080;
 app.listen(PORT, () => {

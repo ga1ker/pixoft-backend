@@ -140,6 +140,61 @@ async function sendVerificationEmail(email, codigo, nombre) {
   await transporter.sendMail(mailOptions);
 }
 
+async function sendAdminEmail(email, nombre, subject, content) {
+  const mailOptions = {
+    from: `"Pixsoft - Administración" <${process.env.EMAIL_USER}>`,
+    to: email,
+    subject: subject,
+    html: `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>${subject}</title>
+        <style>
+          body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin: 0; padding: 0; background: #f8f9fa; }
+          .container { max-width: 600px; margin: 40px auto; background: white; border-radius: 12px; overflow: hidden; box-shadow: 0 10px 30px rgba(0,0,0,0.1); }
+          .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px; text-align: center; }
+          .content { padding: 40px 30px; }
+          .message { font-size: 16px; line-height: 1.6; color: #495057; }
+          .footer { background: #f8f9fa; padding: 20px; text-align: center; color: #6c757d; font-size: 14px; }
+          .content-box { background: #f8f9fa; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #667eea; }
+          @media (max-width: 600px) { 
+            .content { padding: 30px 20px; } 
+            .container { margin: 20px auto; }
+          }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <div class="header">
+            <h1 style="margin: 0; font-size: 24px;">Pixsoft - Mensaje Importante</h1>
+          </div>
+          <div class="content">
+            <h2 style="color: #495057; margin-bottom: 20px;">Hola ${nombre},</h2>
+            <div class="content-box">
+              ${content.replace(/\n/g, '<br>')}
+            </div>
+            <p class="message">
+              Este es un mensaje enviado desde el sistema de administración de Pixsoft.
+            </p>
+          </div>
+          <div class="footer">
+            <p>© ${new Date().getFullYear()} Pixsoft. Todos los derechos reservados.</p>
+            <p style="font-size: 12px; margin-top: 5px;">
+              Este email fue enviado a través del panel de administración
+            </p>
+          </div>
+        </div>
+      </body>
+      </html>
+    `
+  };
+
+  await transporter.sendMail(mailOptions);
+}
+
 async function authenticateUser(email, password) {
     const usuario = await getUsuarioByEmail(email);
 
@@ -178,6 +233,7 @@ module.exports = {
   verifyCode,
   activateUser,
   sendVerificationEmail,
+  sendAdminEmail,
   authenticateUser,
   updateLastLogin
 };

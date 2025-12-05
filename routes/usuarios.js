@@ -55,6 +55,56 @@ router.post('/register', async (req, res) => {
   }
 });
 
+router.post('/send-email', verifyToken, authorizeAdmin, async (req, res) => {
+  try {
+    const { userId, subject, content } = req.body;
+
+    if (!userId || !subject || !content) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Faltan campos requeridos: userId, subject, content' 
+      });
+    }
+
+    // Buscar usuario por ID
+    const user = await db.query(
+      'SELECT id, email, first_name, last_name FROM users WHERE id = $1',
+      [userId]
+    );
+
+    if (user.rows.length === 0) {
+      return res.status(404).json({ 
+        success: false, 
+        message: 'Usuario no encontrado' 
+      });
+    }
+
+    const usuario = user.rows[0];
+    const nombreCompleto = `${usuario.first_name} ${usuario.last_name}`;
+
+    // Enviar email usando el servicio
+    await usuarioService.sendAdminEmail(
+      usuario.email,
+      nombreCompleto,
+      subject,
+      content
+    );
+
+    res.json({ 
+      success: true, 
+      message: 'Email enviado exitosamente' 
+    });
+
+  } catch (error) {
+    console.error('Error sending email:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: 'Error al enviar el email',
+      error: error.message 
+    });
+  }
+});
+
 router.post('/verify-email', async (req, res) => {
   const { userId, code } = req.body;
 

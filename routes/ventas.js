@@ -92,6 +92,135 @@ router.post('/', verifyToken, async (req, res) => {
     }
 });
 
+// Corrige esta parte del router de ventas (/admin)
+router.get('/admin', verifyToken, authorizeAdmin, async (req, res) => {
+    const { 
+        estado_orden, 
+        estado_pago, 
+        metodo_pago,
+        fecha_inicio,
+        fecha_fin,
+        limit,
+        offset
+    } = req.query;
+    
+    let query = `
+        SELECT v.*, 
+               u.first_name as cliente_nombre,
+               u.last_name as cliente_apellido,
+               u.email as cliente_email
+        FROM ventas v
+        LEFT JOIN users u ON v.cliente_id = u.id
+        WHERE 1=1
+    `;
+    
+    const params = [];
+    let paramCount = 1;
+    
+    if (estado_orden) {
+        query += ` AND v.estado_orden = $${paramCount}`;
+        params.push(estado_orden);
+        paramCount++;
+    }
+    
+    if (estado_pago) {
+        query += ` AND v.estado_pago = $${paramCount}`;
+        params.push(estado_pago);
+        paramCount++;
+    }
+    
+    if (metodo_pago) {
+        query += ` AND v.metodo_pago = $${paramCount}`;
+        params.push(metodo_pago);
+        paramCount++;
+    }
+    
+    if (fecha_inicio) {
+        query += ` AND DATE(v.fecha_creacion) >= $${paramCount}`;
+        params.push(fecha_inicio);
+        paramCount++;
+    }
+    
+    if (fecha_fin) {
+        query += ` AND DATE(v.fecha_creacion) <= $${paramCount}`;
+        params.push(fecha_fin);
+        paramCount++;
+    }
+    
+    query += ` ORDER BY v.fecha_creacion DESC`;
+    
+    // Agregar LIMIT y OFFSET solo si están definidos y son números válidos
+    const limitNum = parseInt(limit);
+    const offsetNum = parseInt(offset);
+    
+    if (!isNaN(limitNum) && limitNum > 0) {
+        query += ` LIMIT $${paramCount}`;
+        params.push(limitNum);
+        paramCount++;
+        
+        if (!isNaN(offsetNum) && offsetNum >= 0) {
+            query += ` OFFSET $${paramCount}`;
+            params.push(offsetNum);
+        }
+    }
+    
+    try {
+        const result = await db.query(query, params);
+        
+        // Para el conteo total (sin paginación)
+        let countQuery = `SELECT COUNT(*) FROM ventas v WHERE 1=1`;
+        const countParams = [];
+        let countParamCount = 1;
+        
+        if (estado_orden) {
+            countQuery += ` AND v.estado_orden = $${countParamCount}`;
+            countParams.push(estado_orden);
+            countParamCount++;
+        }
+        
+        if (estado_pago) {
+            countQuery += ` AND v.estado_pago = $${countParamCount}`;
+            countParams.push(estado_pago);
+            countParamCount++;
+        }
+        
+        if (metodo_pago) {
+            countQuery += ` AND v.metodo_pago = $${countParamCount}`;
+            countParams.push(metodo_pago);
+            countParamCount++;
+        }
+        
+        if (fecha_inicio) {
+            countQuery += ` AND DATE(v.fecha_creacion) >= $${countParamCount}`;
+            countParams.push(fecha_inicio);
+            countParamCount++;
+        }
+        
+        if (fecha_fin) {
+            countQuery += ` AND DATE(v.fecha_creacion) <= $${countParamCount}`;
+            countParams.push(fecha_fin);
+            countParamCount++;
+        }
+        
+        const countResult = await db.query(countQuery, countParams);
+        
+        res.json({
+            success: true,
+            ventas: result.rows,
+            total: parseInt(countResult.rows[0].count),
+            limit: !isNaN(limitNum) ? limitNum : null,
+            offset: !isNaN(offsetNum) ? offsetNum : null
+        });
+    } catch (error) {
+        console.error("Error fetching ventas:", error);
+        res.status(500).json({ 
+            success: false,
+            error: 'Error al obtener ventas',
+            details: error.message 
+        });
+    }
+});
+
 router.get('/:id', verifyToken, async (req, res) => {
     const usuario_id = req.user.id;
     const id = parseInt(req.params.id);
@@ -180,124 +309,6 @@ router.delete('/:id', verifyToken, async (req, res) => {
     res.json({ message: "Venta eliminada correctamente." });
 });
 
-router.get('/admin', verifyToken, authorizeAdmin, async (req, res) => {
-    const { 
-        estado_orden, 
-        estado_pago, 
-        metodo_pago,
-        fecha_inicio,
-        fecha_fin,
-        limit = '50', // Valor por defecto como string
-        offset = '0'   // Valor por defecto como string
-    } = req.query;
-    
-    let query = `
-        SELECT v.*, 
-               u.first_name as cliente_nombre,
-               u.last_name as cliente_apellido,
-               u.email as cliente_email
-        FROM ventas v
-        LEFT JOIN users u ON v.cliente_id = u.id
-        WHERE 1=1
-    `;
-    
-    const params = [];
-    let paramCount = 1;
-    
-    if (estado_orden) {
-        query += ` AND v.estado_orden = $${paramCount}`;
-        params.push(estado_orden);
-        paramCount++;
-    }
-    
-    if (estado_pago) {
-        query += ` AND v.estado_pago = $${paramCount}`;
-        params.push(estado_pago);
-        paramCount++;
-    }
-    
-    if (metodo_pago) {
-        query += ` AND v.metodo_pago = $${paramCount}`;
-        params.push(metodo_pago);
-        paramCount++;
-    }
-    
-    if (fecha_inicio) {
-        query += ` AND DATE(v.fecha_creacion) >= $${paramCount}`;
-        params.push(fecha_inicio);
-        paramCount++;
-    }
-    
-    if (fecha_fin) {
-        query += ` AND DATE(v.fecha_creacion) <= $${paramCount}`;
-        params.push(fecha_fin);
-        paramCount++;
-    }
-    
-    query += ` ORDER BY v.fecha_creacion DESC LIMIT $${paramCount} OFFSET $${paramCount + 1}`;
-    
-    // Convertir a enteros con valores por defecto
-    const limitNum = parseInt(limit) || 50;
-    const offsetNum = parseInt(offset) || 0;
-    
-    params.push(limitNum, offsetNum);
-    
-    try {
-        const result = await db.query(query, params);
-        
-        // Para el conteo total
-        let countQuery = `SELECT COUNT(*) FROM ventas v WHERE 1=1`;
-        const countParams = [];
-        let countParamCount = 1;
-        
-        if (estado_orden) {
-            countQuery += ` AND v.estado_orden = $${countParamCount}`;
-            countParams.push(estado_orden);
-            countParamCount++;
-        }
-        
-        if (estado_pago) {
-            countQuery += ` AND v.estado_pago = $${countParamCount}`;
-            countParams.push(estado_pago);
-            countParamCount++;
-        }
-        
-        if (metodo_pago) {
-            countQuery += ` AND v.metodo_pago = $${countParamCount}`;
-            countParams.push(metodo_pago);
-            countParamCount++;
-        }
-        
-        if (fecha_inicio) {
-            countQuery += ` AND DATE(v.fecha_creacion) >= $${countParamCount}`;
-            countParams.push(fecha_inicio);
-            countParamCount++;
-        }
-        
-        if (fecha_fin) {
-            countQuery += ` AND DATE(v.fecha_creacion) <= $${countParamCount}`;
-            countParams.push(fecha_fin);
-            countParamCount++;
-        }
-        
-        const countResult = await db.query(countQuery, countParams);
-        
-        res.json({
-            success: true,
-            ventas: result.rows,
-            total: parseInt(countResult.rows[0].count),
-            limit: limitNum,
-            offset: offsetNum
-        });
-    } catch (error) {
-        console.error("Error fetching ventas:", error);
-        res.status(500).json({ 
-            success: false,
-            error: 'Error al obtener ventas'
-        });
-    }
-});
-
 // Obtener detalles de una venta específica
 router.get('/:id/detalles', verifyToken, async (req, res) => {
     const id = parseInt(req.params.id);
@@ -319,7 +330,7 @@ router.get('/:id/detalles', verifyToken, async (req, res) => {
             SELECT vd.*, 
                    p.nombre as producto_nombre,
                    p.sku as producto_sku,
-                   p.imagen_url as producto_imagen
+                   p.url_imagen as producto_imagen
             FROM venta_detalles vd
             LEFT JOIN productos p ON vd.producto_id = p.id
             WHERE vd.venta_id = $1

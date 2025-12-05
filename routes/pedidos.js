@@ -1,7 +1,532 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../db');
+const { mercadopago } = require('../config/mercadopago');
 const { verifyToken } = require('../middleware/auth');
+
+// Crear preferencia de pago con MercadoPago
+router.post("/crear-preferencia", verifyToken, async (req, res) => {
+  console.log("📦 Recibiendo solicitud para pago online");
+
+  const {
+    total,
+    subtotal,
+    envio = 0,
+    iva = 0,
+    descuento = 0,
+    productos,
+    direccion_envio_id,
+    direccion_facturacion_id,
+    metodo_pago = 'mercadopago', // Cambiado a mercadopago
+    notas = '',
+    cliente_id
+  } = req.body;
+
+  // Validaciones
+  if (!total || !productos || productos.length === 0 || !cliente_id) {
+    return res.status(400).json({ 
+      error: true, 
+      message: "Datos incompletos para el pedido." 
+    });
+  }
+
+  // Verificar si el cliente existe
+  const clienteCheck = await db.query(
+    'SELECT id, email, first_name, last_name FROM users WHERE id = $1',
+    [cliente_id]
+  );
+
+  if (clienteCheck.rows.length === 0) {
+    return res.status(404).json({ 
+      error: true, 
+      message: "Cliente no encontrado." 
+    });
+  }
+
+  const cliente = clienteCheck.rows[0];
+  const emailComprador = cliente.email;
+
+  const client = await db.connect();
+  try {
+    await client.query('BEGIN');
+
+    // Generar número de orden único
+    const timestamp = Date.now();
+    const randomNum = Math.floor(Math.random() * 1000);
+    const numero_orden = `ORD-${timestamp}-${randomNum}`;
+
+    // 1. Crear registro en ventas
+    const insertVenta = await client.query(`
+      INSERT INTO ventas (
+        numero_orden,
+        cliente_id,
+        direccion_envio_id,
+        direccion_facturacion_id,
+        subtotal,
+        descuento,
+        envio,
+        iva,
+        total,
+        metodo_pago,
+        estado_pago,
+        estado_orden,
+        notas
+      )
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+      RETURNING id, numero_orden;
+    `, [
+      numero_orden,
+      cliente_id,
+      direccion_envio_id,
+      direccion_facturacion_id,
+      parseFloat(subtotal),
+      parseFloat(descuento),
+      parseFloat(envio),
+      parseFloat(iva),
+      parseFloat(total),
+      'tarjeta_debito',
+      'pendiente',
+      'pendiente',
+      notas
+    ]);
+
+    const venta = insertVenta.rows[0];
+    const venta_id = venta.id;
+
+    // 2. Crear items para MercadoPago y registrar detalles de venta
+    const items = [];
+    
+    for (const producto of productos) {
+      const unit_price = parseFloat(producto.precio_unitario);
+      const quantity = parseInt(producto.cantidad);
+      
+      if (unit_price <= 0 || quantity <= 0) {
+        throw new Error(`Producto con precio o cantidad inválida: ${producto.nombre}`);
+      }
+
+      // Registrar en venta_detalles
+      await client.query(`
+        INSERT INTO venta_detalles (
+          venta_id,
+          producto_id,
+          cantidad,
+          precio_unitario,
+          descuento_unitario,
+          es_arrendamiento,
+          periodo_arrendamiento,
+          cantidad_periodos,
+          fecha_inicio_arrendamiento,
+          fecha_fin_arrendamiento
+        )
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+      `, [
+        venta_id,
+        producto.id,
+        quantity,
+        unit_price,
+        producto.descuento_unitario || 0,
+        producto.es_arrendamiento || false,
+        producto.periodo_arrendamiento || null,
+        producto.cantidad_periodos || null,
+        producto.fecha_inicio_arrendamiento || null,
+        producto.fecha_fin_arrendamiento || null
+      ]);
+
+      // Actualizar stock del producto
+      await client.query(
+        `UPDATE productos 
+         SET stock = stock - $1,
+             fecha_actualizacion = CURRENT_TIMESTAMP
+         WHERE id = $2`,
+        [quantity, producto.id]
+      );
+
+      // Agregar item a MercadoPago
+      items.push({
+        id: `prod_${producto.id}`,
+        title: producto.nombre.substring(0, 200),
+        description: producto.descripcion ? producto.descripcion.substring(0, 100) : '',
+        quantity: quantity,
+        unit_price: unit_price,
+        currency_id: "MXN",
+        category_id: "software",
+        picture_url: producto.imagen_url || ''
+      });
+    }
+
+    // 3. Agregar costo de envío como item adicional si aplica
+    if (envio > 0) {
+      items.push({
+        title: "Costo de envío",
+        description: "Gastos de envío",
+        quantity: 1,
+        unit_price: parseFloat(envio),
+        currency_id: "MXN"
+      });
+    }
+
+    // 4. Crear preferencia en MercadoPago
+    const formatDateForMercadoPago = (date) => {
+  // Crear fecha en zona horaria local
+  const localDate = new Date(date);
+  
+  // Obtener offset en formato HH:MM
+  const offset = -localDate.getTimezoneOffset();
+  const offsetHours = Math.floor(Math.abs(offset) / 60).toString().padStart(2, '0');
+  const offsetMinutes = (Math.abs(offset) % 60).toString().padStart(2, '0');
+  const offsetSign = offset >= 0 ? '+' : '-';
+  
+  // Formatear fecha YYYY-MM-DDTHH:MM:SS.mmm±HH:MM
+  const year = localDate.getFullYear();
+  const month = (localDate.getMonth() + 1).toString().padStart(2, '0');
+  const day = localDate.getDate().toString().padStart(2, '0');
+  const hours = localDate.getHours().toString().padStart(2, '0');
+  const minutes = localDate.getMinutes().toString().padStart(2, '0');
+  const seconds = localDate.getSeconds().toString().padStart(2, '0');
+  const milliseconds = localDate.getMilliseconds().toString().padStart(3, '0');
+  
+  return `${year}-${month}-${day}T${hours}:${minutes}:${seconds}.${milliseconds}${offsetSign}${offsetHours}:${offsetMinutes}`;
+};
+
+    // Calcular fechas de expiración
+    const expirationDateFrom = new Date();
+    const expirationDateTo = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 horas
+
+    const preference = {
+    items: items,
+    external_reference: venta_id.toString(),
+    notification_url: `${process.env.BACKEND_URL || 'http://localhost:3001'}/pagos/webhook`,
+    payer: {
+        email: emailComprador,
+        name: cliente.first_name,
+        surname: cliente.last_name
+    },
+    statement_descriptor: "PIXSOFT",
+    back_urls: {
+        success: "https://webhook.site/your-unique-url",
+        failure: "https://webhook.site/your-unique-url",
+        pending: "https:s//webhook.site/your-unique-url"
+    },
+    auto_return: "approved",
+    expires: true,
+    expiration_date_from: formatDateForMercadoPago(expirationDateFrom),
+    expiration_date_to: formatDateForMercadoPago(expirationDateTo)
+    };
+
+    console.log("🎯 Creando preferencia en MercadoPago...");
+    const response = await mercadopago.preferences.create(preference);
+
+    await client.query('COMMIT');
+
+    res.json({
+      success: true,
+      id: response.body.id,
+      venta_id: venta_id,
+      numero_orden: numero_orden,
+      init_point: response.body.init_point,
+      sandbox_init_point: response.body.sandbox_init_point
+    });
+
+  } catch (error) {
+    await client.query('ROLLBACK');
+    console.error("❌ Error creando preferencia:", error);
+    res.status(500).json({ 
+      error: true, 
+      message: "Error al procesar el pago: " + error.message 
+    });
+  } finally {
+    client.release();
+  }
+});
+
+// Webhook de MercadoPago
+router.post("/webhook", async (req, res) => {
+  try {
+    console.log("📩 Webhook recibido de MercadoPago");
+    
+    // Log completo del webhook para debug
+    console.log("Body recibido:", JSON.stringify(req.body, null, 2));
+    console.log("Query params:", req.query);
+    console.log("Headers:", req.headers);
+
+    const { type, data } = req.body;
+
+    // Verificar que sea un evento de pago
+    if (type !== "payment") {
+      console.log("⚠️ Tipo de evento no es 'payment':", type);
+      return res.sendStatus(200);
+    }
+
+    if (!data || !data.id) {
+      console.error("❌ No hay data.id en el webhook");
+      return res.sendStatus(200);
+    }
+
+    const paymentId = data.id;
+    console.log(`💰 Procesando pago ID: ${paymentId}`);
+
+    // Obtener detalles del pago desde MercadoPago
+    const payment = await mercadopago.payment.findById(paymentId);
+    const paymentData = payment.body;
+    
+    console.log("📊 Datos del pago recibidos:", {
+      id: paymentData.id,
+      status: paymentData.status,
+      external_reference: paymentData.external_reference,
+      transaction_amount: paymentData.transaction_amount
+    });
+
+    const venta_id = paymentData.external_reference;
+    
+    if (!venta_id) {
+      console.error("❌ No se encontró external_reference en el pago");
+      return res.sendStatus(200);
+    }
+
+    console.log(`🔍 Buscando venta ID: ${venta_id}`);
+
+    // Determinar estados según el pago
+    let estado_pago = 'pendiente';
+    let estado_orden = 'pendiente';
+    let mp_status = paymentData.status;
+    let mp_status_detail = paymentData.status_detail || '';
+    
+    switch (paymentData.status) {
+      case 'approved':
+        estado_pago = 'pagado';
+        estado_orden = 'procesando';
+        console.log(`✅ Pago aprobado para venta ${venta_id}`);
+        break;
+      case 'rejected':
+        estado_pago = 'rechazado';
+        estado_orden = 'cancelado';
+        console.log(`❌ Pago rechazado para venta ${venta_id}`);
+        break;
+      case 'in_process':
+      case 'pending':
+        estado_pago = 'pendiente';
+        estado_orden = 'pendiente';
+        console.log(`⏳ Pago pendiente para venta ${venta_id}`);
+        break;
+      case 'cancelled':
+        estado_pago = 'cancelado';
+        estado_orden = 'cancelado';
+        console.log(`❌ Pago cancelado para venta ${venta_id}`);
+        break;
+      case 'refunded':
+        estado_pago = 'reembolsado';
+        estado_orden = 'cancelado';
+        console.log(`↩️ Pago reembolsado para venta ${venta_id}`);
+        break;
+      case 'charged_back':
+        estado_pago = 'contracargado';
+        estado_orden = 'cancelado';
+        console.log(`⚠️ Pago con contracargo para venta ${venta_id}`);
+        break;
+      default:
+        console.log(`❓ Estado desconocido: ${paymentData.status} para venta ${venta_id}`);
+    }
+
+    // Actualizar la venta en la base de datos
+    const client = await db.connect();
+    try {
+      await client.query('BEGIN');
+
+      // Verificar que la venta existe
+      const ventaCheck = await client.query(
+        'SELECT id FROM ventas WHERE id = $1',
+        [venta_id]
+      );
+
+      if (ventaCheck.rows.length === 0) {
+        console.error(`❌ Venta ${venta_id} no encontrada`);
+        await client.query('ROLLBACK');
+        return res.sendStatus(200);
+      }
+
+      // Actualizar venta con los datos de MercadoPago
+      await client.query(`
+        UPDATE ventas 
+        SET estado_pago = $1,
+            estado_orden = $2,
+            payment_id = $3,
+            mp_status = $4,
+            mp_status_detail = $5,
+            mp_payer_email = $6,
+            mp_payment_method = $7,
+            fecha_actualizacion = CURRENT_TIMESTAMP
+        WHERE id = $8
+      `, [
+        estado_pago,
+        estado_orden,
+        paymentData.id.toString(),
+        mp_status,
+        mp_status_detail,
+        paymentData.payer ? paymentData.payer.email : null,
+        paymentData.payment_method_id,
+        venta_id
+      ]);
+
+      // Si el pago fue aprobado, manejar stock y enviar notificaciones
+      if (paymentData.status === 'approved') {
+        console.log(`🎉 Pago aprobado, procesando venta ${venta_id}`);
+        
+        // Aquí podrías agregar:
+        // 1. Enviar email de confirmación
+        // 2. Generar factura
+        // 3. Actualizar métricas
+        // 4. Notificar al admin
+        
+        // Ejemplo: Obtener datos para email
+        const ventaInfo = await client.query(`
+          SELECT v.numero_orden, v.total, u.email, u.first_name
+          FROM ventas v
+          JOIN users u ON v.cliente_id = u.id
+          WHERE v.id = $1
+        `, [venta_id]);
+
+        if (ventaInfo.rows.length > 0) {
+          const info = ventaInfo.rows[0];
+          console.log(`📧 Pago exitoso para cliente: ${info.email}, Orden: ${info.numero_orden}`);
+          
+          // Aquí puedes enviar email usando tu servicio de email
+          // await emailService.sendPaymentConfirmation(info.email, info.numero_orden, info.total);
+        }
+      }
+
+      await client.query('COMMIT');
+      console.log(`✅ Venta ${venta_id} actualizada exitosamente`);
+
+    } catch (dbError) {
+      await client.query('ROLLBACK');
+      console.error("❌ Error actualizando base de datos:", dbError);
+      // No enviamos error 500 para que MercadoPago no reintente constantemente
+      console.log("⚠️ Enviando 200 a MercadoPago (no reintentar)");
+    } finally {
+      client.release();
+    }
+
+    // IMPORTANTE: Siempre devolver 200 a MercadoPago
+    res.sendStatus(200);
+    
+  } catch (error) {
+    console.error("❌ Error en webhook:", error);
+    // IMPORTANTE: Siempre devolver 200 a MercadoPago
+    res.sendStatus(200);
+  }
+});
+
+// Obtener estado de pago por ID de venta
+router.get("/estado/:venta_id", verifyToken, async (req, res) => {
+  try {
+    const { venta_id } = req.params;
+    const cliente_id = req.user.id;
+
+    const venta = await db.query(`
+      SELECT 
+        id,
+        numero_orden,
+        subtotal,
+        descuento,
+        envio,
+        iva,
+        total,
+        metodo_pago,
+        estado_pago,
+        estado_orden,
+        payment_id,
+        mp_status,
+        mp_status_detail,
+        mp_payer_email,
+        mp_payment_method,
+        fecha_creacion,
+        fecha_actualizacion
+      FROM ventas 
+      WHERE id = $1 AND cliente_id = $2
+    `, [venta_id, cliente_id]);
+
+    if (venta.rows.length === 0) {
+      return res.status(404).json({ 
+        error: true, 
+        message: "Venta no encontrada" 
+      });
+    }
+
+    res.json({
+      success: true,
+      venta: venta.rows[0]
+    });
+  } catch (error) {
+    console.error("Error obteniendo estado de pago:", error);
+    res.status(500).json({ error: true, message: error.message });
+  }
+});
+
+// Obtener estado de pago por número de orden
+router.get("/estado-orden/:numero_orden", async (req, res) => {
+  try {
+    const { numero_orden } = req.params;
+
+    const venta = await db.query(`
+      SELECT 
+        id,
+        numero_orden,
+        estado_pago,
+        estado_orden,
+        mp_status,
+        mp_status_detail,
+        total,
+        fecha_creacion
+      FROM ventas 
+      WHERE numero_orden = $1
+    `, [numero_orden]);
+
+    if (venta.rows.length === 0) {
+      return res.status(404).json({ 
+        error: true, 
+        message: "Orden no encontrada" 
+      });
+    }
+
+    res.json({
+      success: true,
+      venta: venta.rows[0]
+    });
+  } catch (error) {
+    console.error("Error obteniendo estado de orden:", error);
+    res.status(500).json({ error: true, message: error.message });
+  }
+});
+
+// Endpoint para verificar webhook (debug)
+router.get("/webhook-debug", async (req, res) => {
+  try {
+    const ventas = await db.query(`
+      SELECT 
+        id,
+        numero_orden,
+        estado_pago,
+        estado_orden,
+        mp_status,
+        payment_id,
+        fecha_creacion,
+        fecha_actualizacion
+      FROM ventas 
+      WHERE metodo_pago = 'mercadopago'
+      ORDER BY fecha_creacion DESC 
+      LIMIT 10
+    `);
+
+    res.json({
+      success: true,
+      total: ventas.rows.length,
+      ventas: ventas.rows
+    });
+  } catch (error) {
+    console.error("Error en debug:", error);
+    res.status(500).json({ error: true, message: error.message });
+  }
+});
 
 // Obtener todos los pedidos del usuario con detalles
 router.get('/', verifyToken, async (req, res) => {

@@ -137,4 +137,39 @@ router.post("/change-role", verifyToken, authorizeAdmin, async (req, res) => {
     }
 })
 
+router.get("/:id_usuario", verifyToken, async (req, res) => {
+      // Si viene del token, úsalo directamente
+    if (!req.user || !req.user.id) {
+      return res.status(401).json({ error: "Token inválido o usuario no encontrado" });
+    }
+
+    const id_usuario = req.params.id_usuario
+
+  try {
+
+    if (isNaN(id_usuario)) {
+      return res.status(400).json({ error: "ID de usuario inválido" });
+    }
+
+    const usuarioResult = await db.query(
+      `SELECT email, first_name, last_name, created_at, updated_at, last_login 
+       FROM users 
+       WHERE id = $1`,
+      [id_usuario]
+    );
+
+    const usuario = usuarioResult.rows[0];
+
+    if (!usuario) {
+      return res.status(404).json({ error: "Usuario no encontrado" });
+    }
+
+    res.json({ data: usuario });
+
+  } catch (err) {
+    console.error("Error en GET /usuario:", err);
+    return res.status(500).json({ error: "Error interno del servidor" });
+  }
+});
+
 module.exports = router;

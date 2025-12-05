@@ -17,7 +17,7 @@ router.get("/", async (req, res) => {
     const limit = Number(req.query.limit) || 21
     const offset = (page - 1) * limit
 
-    const whereClauses = ["p.activo = true"]
+    const whereClauses = ["p.activo = true and p.stock > 0"]
     const queryParams = []
     let paramIndex = 1
 

@@ -78,8 +78,9 @@ router.get('/', verifyToken, async (req, res) => {
     }
 });
 
-router.post('/agregar', async (req, res) => {
-  const { usuario_id, producto_id, cantidad } = req.body;
+router.post('/agregar', verifyToken, async (req, res) => {
+  const usuario_id = req.user.id;
+  const { producto_id, cantidad } = req.body;
 
   if (!usuario_id || !producto_id || !cantidad) {
     return res.status(400).json({

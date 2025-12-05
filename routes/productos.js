@@ -7,34 +7,54 @@ const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
 require('dotenv').config();
 
-router.get('/', async(req, res) =>{
-    const {
-      page,
-    } = req.query;
-    try{
-        
-    console.log("Query params recibidos: ", req.query)
+router.get('/', async (req, res) => {
+  try {
+    console.log("Query params recibidos: ", req.query);
+
+    let page = parseInt(req.query.page) || 1;
     let limit = parseInt(req.query.limit) || 21;
-    const currentPage = parseInt(page);
-    let offset = (currentPage - 1) * limit;
+    let offset = (page - 1) * limit;
 
-                   // desplazamiento SQL
+    let whereClauses = ['p.activo = true'];
+    let queryParams = [];
+    let paramIndex = 1;
+
+    if (categoria) {
+    whereClauses.push(`(p.categoria_id = $${paramIndex++} `);
+    queryParams.push(categoria);
+  }
+  if (marca) {
+    whereClauses.push(`m.nombre ILIKE $${paramIndex++}`);
+    queryParams.push(`%${marca}%`);
+  }
+ 
+
     const productosQuery = `
-      SELECT * FROM productos 
-      ORDER BY fecha_creacion DESC
-      LIMIT $1 OFFSET $2
-    `;
+  SELECT 
+    p.id,
+    p.nombre AS producto_nombre,
+    p.url_imagen,
+    p.precio,
+    c.nombre AS categoria_nombre,
+    p.precio_descuento,
+    p.destacado,
+    p.activo,
+    p.stock,
+    COALESCE(AVG(o.calificacion), 0) AS promedio_calificacion
+  FROM productos p
+  LEFT JOIN opiniones o ON o.producto_id = p.id
+  LEFT JOIN categorias c ON p.categoria_id = c.id
+  GROUP BY p.id, c.id
+  ORDER BY p.fecha_creacion DESC
+  LIMIT $1 OFFSET $2
+`;
 
-    const countQuery = `
-      SELECT COUNT(*) FROM productos
-    `;
+    // Conteo total
+    const countQuery = `SELECT COUNT(*) FROM productos`;
 
     const productos = await db.query(productosQuery, [limit, offset]);
     const total = await db.query(countQuery);
-    if (categoria_id) {
-    whereClauses.push(`m.nombre_marca ILIKE $${paramIndex++}`);
-    queryParams.push(`%${categoria_id}%`);
-  }
+
     res.json({
       page,
       limit,
@@ -47,9 +67,51 @@ router.get('/', async(req, res) =>{
     console.error(error);
     res.status(500).json({ error: "Error obteniendo productos" });
   }
+});
+
+router.get('/:id_producto', async(req, res)=>{
+    const id_producto = parseInt(req.params.id_producto);
+    if(isNaN(id_producto)){
+        return res.status(400).send('Id de producto invalido')
+    }
+    try{
+        const perfumeResult = await db.query(`
+            SELECT 
+    p.id,
+    p.nombre AS producto_nombre,
+    p.descripcion,
+    p.caracteristicas,
+    c.nombre AS categoria_nombre,
+    m.nombre AS marca_nombre,
+    p.url_imagen,
+    p.precio,
+    p.precio_descuento,
+    p.destacado,
+    p.activo,
+    p.stock,
+    COALESCE(AVG(o.calificacion), 0) AS promedio_calificacion
+  FROM productos p
+  LEFT JOIN marcas m ON p.marca_id = m.id
+  LEFT JOIN opiniones o ON o.producto_id = p.id
+  LEFT JOIN categorias c ON p.categoria_id = c.id
+  WHERE p.id = $1
+  GROUP BY p.id, c.id, m.id;
+    `, [id_producto])
+    const producto = perfumeResult
+
+    res.json({
+        data:producto.rows[0]
+    })
+    }
+    catch(error){
+        console.error(error)
+    }
 
    
+
 })
+
+
 
 router.post("/agregar", async(req, res)=>{
      const {
@@ -82,7 +144,7 @@ router.post("/agregar", async(req, res)=>{
         const categoriaResult = await db.query(`
             SELECT id FROM categorias WHERE nombre = $1  
             `, [categoria])
-            
+
         if (marcaResult.rows.length === 0){
             const insertMarcaResult = await db.query(`
                 INSERT INTO marcas (nombre)

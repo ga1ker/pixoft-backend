@@ -14,7 +14,7 @@ router.get('/producto/:producto_id', async (req, res) => {
         const result = await db.query(
             `SELECT 
                 o.id, o.producto_id, o.usuario_id, o.venta_id, o.calificacion, o.comentario, o.fecha_creacion,
-                u.nombre as usuario_nombre, u.email as usuario_email,
+                u.first_name as usuario_nombre, u.email as usuario_email,
                 p.nombre as producto_nombre
              FROM opiniones o
              JOIN users u ON o.usuario_id = u.id

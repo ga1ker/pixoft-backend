@@ -246,6 +246,7 @@ router.get("/resumen-dia", verifyToken, authorizeAdmin, async (req, res) => {
     }
 });
 
+
 router.get("/alertas", verifyToken, authorizeAdmin, async (req, res) => {
     try {
         const [productosCriticos, metaVentas] = await Promise.all([

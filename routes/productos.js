@@ -7,68 +7,91 @@ const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
 require('dotenv').config();
 
-router.get('/', async (req, res) => {
-  const { categoria, marca } = req.query;
+router.get("/", async (req, res) => {
+  const { categoria, marca, tipo } = req.query
+
   try {
-    console.log("Query params recibidos: ", req.query);
+    console.log("Query params recibidos: ", req.query)
 
-    let page = parseInt(req.query.page) || 1;
-    let limit = parseInt(req.query.limit) || 21;
-    let offset = (page - 1) * limit;
+    const page = Number(req.query.page) || 1
+    const limit = Number(req.query.limit) || 21
+    const offset = (page - 1) * limit
 
-    let whereClauses = ['p.activo = true'];
-    let queryParams = [];
-    let paramIndex = 1;
+    const whereClauses = ["p.activo = true"]
+    const queryParams = []
+    let paramIndex = 1
 
     if (categoria) {
-      whereClauses.push(`(p.categoria_id = $${paramIndex++} `);
-      queryParams.push(categoria);
+      whereClauses.push(`p.categoria_id = $${paramIndex}`)
+      queryParams.push(categoria)
+      paramIndex++
     }
+
+    if (tipo) {
+      whereClauses.push(`p.tipo = $${paramIndex}`)
+      queryParams.push(tipo)
+      paramIndex++
+    }
+
     if (marca) {
-      whereClauses.push(`m.nombre ILIKE $${paramIndex++}`);
-      queryParams.push(`%${marca}%`);
+      whereClauses.push(`p.marca_id = $${paramIndex}`)
+      queryParams.push(`${marca}`)
+      paramIndex++
     }
- 
+
+    const whereSQL = whereClauses.length ? `WHERE ${whereClauses.join(" AND ")}` : ""
 
     const productosQuery = `
-  SELECT 
-    p.id,
-    p.nombre AS producto_nombre,
-    p.url_imagen,
-    p.precio,
-    c.nombre AS categoria_nombre,
-    p.precio_descuento,
-    p.destacado,
-    p.activo,
-    p.stock,
-    COALESCE(AVG(o.calificacion), 0) AS promedio_calificacion
-  FROM productos p
-  LEFT JOIN opiniones o ON o.producto_id = p.id
-  LEFT JOIN categorias c ON p.categoria_id = c.id
-  GROUP BY p.id, c.id
-  ORDER BY p.fecha_creacion DESC
-  LIMIT $1 OFFSET $2
-`;
+      SELECT 
+        p.id,
+        p.nombre AS producto_nombre,
+        p.url_imagen,
+        p.precio,
+        c.nombre AS categoria_nombre,
+        p.precio_descuento,
+        p.destacado,
+        p.activo,
+        p.stock,
+        COALESCE(AVG(o.calificacion), 0) AS promedio_calificacion
+      FROM productos p
+      LEFT JOIN opiniones o ON o.producto_id = p.id
+      LEFT JOIN categorias c ON p.categoria_id = c.id
+      LEFT JOIN marcas m ON m.id = p.marca_id
+      ${whereSQL}
+      GROUP BY p.id, c.id
+      ORDER BY p.fecha_creacion DESC
+      LIMIT $${paramIndex} OFFSET $${paramIndex + 1}
+    `
 
-    // Conteo total
-    const countQuery = `SELECT COUNT(*) FROM productos`;
+    queryParams.push(limit, offset)
 
-    const productos = await db.query(productosQuery, [limit, offset]);
-    const total = await db.query(countQuery);
+    const countQuery = `
+      SELECT COUNT(*) AS total
+      FROM productos p
+      LEFT JOIN marcas m ON m.id = p.marca_id
+      ${whereSQL}
+    `
+
+    const [productos, total] = await Promise.all([
+      db.query(productosQuery, queryParams),
+      db.query(countQuery, queryParams.slice(0, paramIndex - 1)),
+    ])
+
+    const totalCount = Number(total.rows[0].total)
 
     res.json({
       page,
       limit,
-      total: parseInt(total.rows[0].count),
-      total_pages: Math.ceil(total.rows[0].count / limit),
-      data: productos.rows
-    });
-
+      total: totalCount,
+      total_pages: Math.ceil(totalCount / limit),
+      data: productos.rows,
+    })
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: "Error obteniendo productos" });
+    console.error(error)
+    res.status(500).json({ error: "Error obteniendo productos" })
   }
-});
+})
+
 
 router.get('/:id_producto', async(req, res)=>{
     const id_producto = parseInt(req.params.id_producto);

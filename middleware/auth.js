@@ -22,8 +22,6 @@ function verifyToken(req, res, next) {
 }
 
 function authorizeAdmin(req, res, next) {
-    console.log(req.user);
-    console.log(req.user.role);
     if (!req.user || req.user.role != 'admin') {
         return res.status(403).send('Acceso denegado. Se requiere rol de administrador.');
     }

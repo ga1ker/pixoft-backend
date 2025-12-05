@@ -1,3 +1,4 @@
+
 const express = require('express');
 const router = express.Router();
 const db = require('../db');
@@ -20,6 +21,33 @@ router.get('/', verifyToken, async (req, res) => {
     } catch (err) {
         console.error('Error al obtener direcciones:', err);
         res.status(500).send('Error interno del servidor al obtener direcciones.');
+    }
+});
+
+// Obtener UNA sola dirección del usuario por ID
+router.get('/direccion/:id', verifyToken, async (req, res) => {
+    const usuario_id = req.user.id;
+    const direccion_id = req.params.id;
+
+    try {
+        const result = await db.query(
+            `SELECT id, usuario_id, alias, calle, numero_exterior, numero_interior, colonia, ciudad, estado,
+                    codigo_postal, pais, entre_calles, referencia, es_principal, es_facturacion
+             FROM direcciones
+             WHERE id = $1 AND usuario_id = $2
+             LIMIT 1`,
+            [direccion_id, usuario_id]
+        );
+
+        if (result.rows.length === 0) {
+            return res.status(404).json({ error: "Dirección no encontrada o no pertenece al usuario" });
+        }
+
+        res.status(200).json(result.rows[0]);
+
+    } catch (err) {
+        console.error('Error al obtener dirección:', err);
+        res.status(500).send('Error interno del servidor al obtener dirección.');
     }
 });
 
@@ -427,6 +455,33 @@ router.put('/set-facturacion/:id', verifyToken, async (req, res) => {
     } finally {
         client.release();
     }
+});
+
+// Obtener UNA sola dirección del usuario por ID
+router.get('/direccion/:id', verifyToken, async (req, res) => {
+  const usuario_id = req.user.id;
+  const direccion_id = req.params.id;
+
+  try {
+    const result = await db.query(
+      `SELECT id, usuario_id, alias, calle, numero_exterior, numero_interior, colonia, ciudad, estado,
+              codigo_postal, pais, entre_calles, referencia, es_principal, es_facturacion
+       FROM direcciones
+       WHERE id = $1 AND usuario_id = $2
+       LIMIT 1`,
+      [direccion_id, usuario_id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: "Dirección no encontrada o no pertenece al usuario" });
+    }
+
+    res.status(200).json(result.rows[0]);
+
+  } catch (err) {
+    console.error('Error al obtener dirección:', err);
+    res.status(500).send('Error interno del servidor al obtener dirección.');
+  }
 });
 
 module.exports = router;

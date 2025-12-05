@@ -13,6 +13,8 @@ const venta_detallesRoute = require('./routes/venta_detalles');
 const agenteRoute = require('./routes/agente');
 const enviosRouter = require('./routes/envios');
 const pagosRoute = require('./routes/pagos');
+const pedidosRouter = require('./routes/pedidos');
+const dashboardRoute = require('./routes/dashboard');
 
 const app = express();
 
@@ -34,6 +36,8 @@ app.use('/api/venta_detalles', venta_detallesRoute);
 app.use('/api/agente', agenteRoute);
 app.use('/api/pagos', pagosRoute);
 app.use('/api/envios', enviosRouter)
+app.use('/api/pedidos', pedidosRouter);
+app.use('/api/dashboard', dashboardRoute);
 
 const PORT = process.env.PORT || 8080;
 app.listen(PORT, () => {

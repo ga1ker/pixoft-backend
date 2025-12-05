@@ -9,6 +9,7 @@ const direccionesRoute = require('./routes/direcciones');
 const carritoRoute = require('./routes/carrito');
 const opinionesRoute = require('./routes/opiniones');
 const venta_detallesRoute = require('./routes/venta_detalles');
+const agenteRoute = require('./routes/agente');
 
 const app = express();
 
@@ -27,6 +28,7 @@ app.use('/api/carrito', carritoRoute);
 app.use('/api/opiniones', opinionesRoute);
 app.use('/api/direcciones', direccionesRoute);
 app.use('/api/venta_detalles', venta_detallesRoute);
+app.use('/api/agente', agenteRoute);
 
 const PORT = process.env.PORT || 8080;
 app.listen(PORT, () => {

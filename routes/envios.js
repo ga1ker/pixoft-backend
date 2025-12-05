@@ -110,15 +110,19 @@ router.post("/cotizar", verifyToken, async (req, res) => {
     }
 
     // 5. Responder cotización ordenada
-    if (rates.length > 0) {
-      rates.sort((a, b) => Number(a.total_pricing) - Number(b.total_pricing));
-      return res.json({
-        shipping_cost: Number(rates[0].total_pricing),
-        rates
-      });
-    } else {
-      return res.json({ shipping_cost: 150, error: "No hay opciones de envío disponibles" });
-    }
+   // 5. Filtrar solo tarifas exitosas
+const validRates = rates
+  .filter(r => r.success === true && r.total)
+  .sort((a, b) => Number(a.total_pricing) - Number(b.total_pricing));
+
+  const bestRate = validRates[0];
+return res.json({
+  shipping_cost: bestRate ? Number(bestRate.total) : null,
+  rates,
+});
+
+
+
 
   } catch (error) {
     console.error(error.response?.data || error.message);

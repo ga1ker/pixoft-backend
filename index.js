@@ -29,6 +29,7 @@ app.use('/api/opiniones', opinionesRoute);
 app.use('/api/direcciones', direccionesRoute);
 app.use('/api/venta_detalles', venta_detallesRoute);
 app.use('/api/agente', agenteRoute);
+app.use('/api/pedidos', pedidosRouter);
 
 const PORT = process.env.PORT || 8080;
 app.listen(PORT, () => {

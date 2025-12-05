@@ -8,7 +8,7 @@ const jwt = require("jsonwebtoken");
 require('dotenv').config();
 
 router.get("/", async (req, res) => {
-  const { categoria, marca, tipo, destacado, searchQuery } = req.query
+  const { categoria, marca, tipo, destacado, searchQuery, offer } = req.query
 
   try {
     console.log("Query params recibidos: ", req.query)
@@ -49,6 +49,10 @@ router.get("/", async (req, res) => {
       whereClauses.push(`(p.nombre ILIKE $${paramIndex} OR p.descripcion ILIKE $${paramIndex})`)
       queryParams.push(`%${searchQuery}%`)
       paramIndex++
+    }
+
+    if (offer) {
+      whereClauses.push(`p.precio_descuento IS NOT NULL AND p.precio_descuento < p.precio`)
     }
 
     const whereSQL = whereClauses.length ? `WHERE ${whereClauses.join(" AND ")}` : ""

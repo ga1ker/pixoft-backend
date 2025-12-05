@@ -10,6 +10,7 @@ const carritoRoute = require('./routes/carrito');
 const opinionesRoute = require('./routes/opiniones');
 const venta_detallesRoute = require('./routes/venta_detalles');
 const agenteRoute = require('./routes/agente');
+const pedidosRouter = require('./routes/pedidos');
 
 const app = express();
 

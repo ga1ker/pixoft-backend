@@ -137,6 +137,31 @@ router.post("/change-role", verifyToken, authorizeAdmin, async (req, res) => {
     }
 })
 
+router.get('/profile', verifyToken, async (req, res) => {
+    const id_usuario = req.user.id;
+
+    try {
+        const usuarioResult = await db.query(
+            `SELECT email, first_name, role 
+             FROM users 
+             WHERE id = $1`,
+            [id_usuario]
+        );
+
+        const usuario = usuarioResult.rows[0];
+
+        if (!usuario) {
+            return res.status(404).json({ error: "Usuario no encontrado" });
+        }
+
+        res.json({ data: usuario });
+
+    } catch (err) {
+        console.error("Error en GET /usuario/profile:", err);
+        return res.status(500).json({ error: "Error interno del servidor" });
+    }
+});
+
 router.get("/:id_usuario", verifyToken, async (req, res) => {
       // Si viene del token, úsalo directamente
     if (!req.user || !req.user.id) {

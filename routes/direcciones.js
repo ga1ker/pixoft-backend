@@ -274,9 +274,13 @@ router.delete('/:id', verifyToken, async (req, res) => {
         if (es_principal) {
             await client.query(
                 `UPDATE direcciones
-                 SET es_principal = TRUE
-                 WHERE usuario_id = $1
-                 LIMIT 1`,
+                SET es_principal = TRUE
+                WHERE id = (
+                    SELECT id FROM direcciones
+                    WHERE usuario_id = $1
+                    ORDER BY id ASC
+                    LIMIT 1
+                )`,
                 [usuario_id]
             );
         }
@@ -285,9 +289,13 @@ router.delete('/:id', verifyToken, async (req, res) => {
         if (es_facturacion) {
             await client.query(
                 `UPDATE direcciones
-                 SET es_facturacion = TRUE
-                 WHERE usuario_id = $1
-                 LIMIT 1`,
+                SET es_facturacion = TRUE
+                WHERE id = (
+                    SELECT id FROM direcciones
+                    WHERE usuario_id = $1
+                    ORDER BY id ASC
+                    LIMIT 1
+                )`,
                 [usuario_id]
             );
         }

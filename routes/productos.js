@@ -128,6 +128,7 @@ router.get('/:id_producto', async(req, res)=>{
     p.precio_descuento,
     p.destacado,
     p.activo,
+    p.sku,
     p.stock,
     COALESCE(AVG(o.calificacion), 0) AS promedio_calificacion
   FROM productos p

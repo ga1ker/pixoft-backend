@@ -249,7 +249,7 @@ router.get("/cuenta", verifyToken, async (req, res) => {
     }
 
     const usuarioResult = await db.query(
-      `SELECT id, email, first_name, last_name, created_at, updated_at, last_login 
+      `SELECT id, email, role, first_name, last_name, created_at, updated_at, last_login 
        FROM users 
        WHERE id = $1`,
       [req.user.id]

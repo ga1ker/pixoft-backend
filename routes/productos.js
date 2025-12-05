@@ -8,6 +8,7 @@ const jwt = require("jsonwebtoken");
 require('dotenv').config();
 
 router.get('/', async (req, res) => {
+  const { categoria, marca } = req.query;
   try {
     console.log("Query params recibidos: ", req.query);
 
@@ -20,13 +21,13 @@ router.get('/', async (req, res) => {
     let paramIndex = 1;
 
     if (categoria) {
-    whereClauses.push(`(p.categoria_id = $${paramIndex++} `);
-    queryParams.push(categoria);
-  }
-  if (marca) {
-    whereClauses.push(`m.nombre ILIKE $${paramIndex++}`);
-    queryParams.push(`%${marca}%`);
-  }
+      whereClauses.push(`(p.categoria_id = $${paramIndex++} `);
+      queryParams.push(categoria);
+    }
+    if (marca) {
+      whereClauses.push(`m.nombre ILIKE $${paramIndex++}`);
+      queryParams.push(`%${marca}%`);
+    }
  
 
     const productosQuery = `

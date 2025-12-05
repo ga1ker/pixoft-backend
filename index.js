@@ -16,6 +16,7 @@ const pagosRoute = require('./routes/pagos');
 const pedidosRouter = require('./routes/pedidos');
 const proveedoresRouter = require('./routes/proveedores');
 const dashboardRoute = require('./routes/dashboard');
+const arrendamientosRoute = require('./routes/arrendamientos');
 
 const app = express();
 
@@ -40,6 +41,7 @@ app.use('/api/envios', enviosRouter)
 app.use('/api/pedidos', pedidosRouter);
 app.use('/api/proveedores', proveedoresRouter);
 app.use('/api/dashboard', dashboardRoute);
+app.use('/api/arrendamientos', arrendamientosRoute);
 
 const PORT = process.env.PORT || 8080;
 app.listen(PORT, () => {

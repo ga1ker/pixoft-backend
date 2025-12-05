@@ -484,4 +484,35 @@ router.get('/direccion/:id', verifyToken, async (req, res) => {
   }
 });
 
+// Obtener una dirección únicamente por su ID (sin validar usuario)
+router.get('/public/:id', async (req, res) => {
+    const direccion_id = req.params.id;
+
+    if (isNaN(direccion_id)) {
+        return res.status(400).json({ error: "ID inválido." });
+    }
+
+    try {
+        const result = await db.query(
+            `SELECT id, usuario_id, alias, calle, numero_exterior, numero_interior, colonia, ciudad, estado,
+                    codigo_postal, pais, entre_calles, referencia, es_principal, es_facturacion
+            FROM direcciones
+            WHERE id = $1
+            LIMIT 1`,
+            [direccion_id]
+        );
+
+        if (result.rows.length === 0) {
+            return res.status(404).json({ error: "Dirección no encontrada." });
+        }
+
+        res.status(200).json(result.rows[0]);
+
+    } catch (error) {
+        console.error("Error al obtener dirección pública:", error);
+        res.status(500).send("Error interno del servidor.");
+    }
+});
+
+
 module.exports = router;

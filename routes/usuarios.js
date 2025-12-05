@@ -187,42 +187,64 @@ router.post("/change-role", verifyToken, authorizeAdmin, async (req, res) => {
     }
 })
 
-router.get('/profile', verifyToken, async (req, res) => {
-    const id_usuario = req.user.id;
+router.put('/actualizar', verifyToken, async (req, res) => {
+  const id_usuario = req.user.id;
+  const { email, first_name, last_name, url_imagen_user } = req.body;
 
-    try {
-        const usuarioResult = await db.query(
-            `SELECT email, first_name, role 
-             FROM users 
-             WHERE id = $1`,
-            [id_usuario]
-        );
+  try {
+    // Obtener los datos actuales del usuario
+    const usuarioResult = await db.query(
+      `SELECT email, first_name, last_name, url_imagen_user, role
+       FROM users
+       WHERE id = $1`,
+      [id_usuario]
+    );
 
-        const usuario = usuarioResult.rows[0];
+    const usuario = usuarioResult.rows[0];
 
-        if (!usuario) {
-            return res.status(404).json({ error: "Usuario no encontrado" });
-        }
-
-        res.json({ data: usuario });
-
-    } catch (err) {
-        console.error("Error en GET /usuario/profile:", err);
-        return res.status(500).json({ error: "Error interno del servidor" });
+    if (!usuario) {
+      return res.status(404).json({ error: "Usuario no encontrado" });
     }
+
+    // Usar los valores nuevos si vienen, si no, mantener los actuales
+    const updatedEmail = email || usuario.email;
+    const updatedFirstName = first_name || usuario.first_name;
+    const updatedLastName = last_name || usuario.last_name;
+    const updatedUrlImagen = url_imagen_user !== undefined ? url_imagen_user : usuario.url_imagen_user;
+
+    // Actualizar usuario
+    const updateResult = await db.query(
+      `UPDATE users
+       SET email = $1,
+           first_name = $2,
+           last_name = $3,
+           url_imagen_user = $4,
+           updated_at = NOW()
+       WHERE id = $5
+       RETURNING id, email, first_name, last_name, url_imagen_user, role, created_at, updated_at`,
+      [updatedEmail, updatedFirstName, updatedLastName, updatedUrlImagen, id_usuario]
+    );
+
+    const updatedUser = updateResult.rows[0];
+
+    res.json({ data: updatedUser });
+
+  } catch (err) {
+    console.error("Error en PATCH /usuario/actualizar:", err);
+    res.status(500).json({ error: "Error interno del servidor" });
+  }
 });
 
-router.get("/:id_usuario", verifyToken, async (req, res) => {
+
+router.get("/cuenta", verifyToken, async (req, res) => {
       // Si viene del token, úsalo directamente
     if (!req.user || !req.user.id) {
       return res.status(401).json({ error: "Token inválido o usuario no encontrado" });
     }
 
-    const id_usuario = req.params.id_usuario
-
   try {
 
-    if (isNaN(id_usuario)) {
+    if (isNaN(req.user.id)) {
       return res.status(400).json({ error: "ID de usuario inválido" });
     }
 
@@ -230,7 +252,7 @@ router.get("/:id_usuario", verifyToken, async (req, res) => {
       `SELECT email, first_name, last_name, created_at, updated_at, last_login 
        FROM users 
        WHERE id = $1`,
-      [id_usuario]
+      [req.user.id]
     );
 
     const usuario = usuarioResult.rows[0];

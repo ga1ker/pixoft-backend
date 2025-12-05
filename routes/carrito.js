@@ -146,4 +146,105 @@ router.post('/agregar', verifyToken, async (req, res) => {
   }
 });
 
+router.put('/:id', verifyToken, async (req, res) => {
+    const { id } = req.params;
+    const { cantidad } = req.body;
+    const usuario_id = req.user.id;
+
+    if (!cantidad || cantidad < 1) {
+        return res.status(400).json({ error: "La cantidad debe ser al menos 1" });
+    }
+
+    try {
+        // Verificar que el item pertenece al usuario
+        const verifyQuery = `
+            SELECT * FROM carrito 
+            WHERE id = $1 AND usuario_id = $2
+        `;
+        const verifyResult = await db.query(verifyQuery, [id, usuario_id]);
+
+        if (verifyResult.rows.length === 0) {
+            return res.status(404).json({ error: "Item no encontrado en el carrito" });
+        }
+
+        // Actualizar cantidad
+        const updateQuery = `
+            UPDATE carrito 
+            SET cantidad = $1 
+            WHERE id = $2 AND usuario_id = $3
+            RETURNING *
+        `;
+        const updateResult = await db.query(updateQuery, [cantidad, id, usuario_id]);
+
+        res.json({
+            message: "Cantidad actualizada",
+            item: updateResult.rows[0],
+            success: true
+        });
+    } catch (error) {
+        console.error("Error al actualizar carrito:", error);
+        res.status(500).json({ error: "Error interno del servidor" });
+    }
+});
+
+// Eliminar un producto del carrito
+router.delete('/:id', verifyToken, async (req, res) => {
+    const { id } = req.params;
+    const usuario_id = req.user.id;
+
+    try {
+        // Verificar que el item pertenece al usuario
+        const verifyQuery = `
+            SELECT * FROM carrito 
+            WHERE id = $1 AND usuario_id = $2
+        `;
+        const verifyResult = await db.query(verifyQuery, [id, usuario_id]);
+
+        if (verifyResult.rows.length === 0) {
+            return res.status(404).json({ error: "Item no encontrado en el carrito" });
+        }
+
+        // Eliminar item
+        const deleteQuery = `
+            DELETE FROM carrito 
+            WHERE id = $1 AND usuario_id = $2
+            RETURNING *
+        `;
+        const deleteResult = await db.query(deleteQuery, [id, usuario_id]);
+
+        res.json({
+            message: "Producto eliminado del carrito",
+            item: deleteResult.rows[0],
+            success: true
+        });
+    } catch (error) {
+        console.error("Error al eliminar del carrito:", error);
+        res.status(500).json({ error: "Error interno del servidor" });
+    }
+});
+
+// Vaciar el carrito completo
+router.delete('/limpiar', verifyToken, async (req, res) => {
+    const usuario_id = req.user.id;
+
+    try {
+        // Eliminar todos los items del usuario
+        const deleteQuery = `
+            DELETE FROM carrito 
+            WHERE usuario_id = $1
+            RETURNING *
+        `;
+        const deleteResult = await db.query(deleteQuery, [usuario_id]);
+
+        res.json({
+            message: "Carrito vaciado",
+            items_deleted: deleteResult.rowCount,
+            success: true
+        });
+    } catch (error) {
+        console.error("Error al vaciar carrito:", error);
+        res.status(500).json({ error: "Error interno del servidor" });
+    }
+});
+
 module.exports = router

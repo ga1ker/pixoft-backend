@@ -131,6 +131,7 @@ router.get('/activos-simple', verifyToken, authorizeAdmin, async (req, res) => {
         vd.fecha_inicio_arrendamiento,
         vd.fecha_fin_arrendamiento,
         v.estado_orden,
+        v.estado_arrenda,  
         v.total,
         v.fecha_creacion
       FROM venta_detalles vd
@@ -152,14 +153,20 @@ router.get('/activos-simple', verifyToken, authorizeAdmin, async (req, res) => {
       const diasRestantes = Math.ceil((fechaFin - hoy) / (1000 * 60 * 60 * 24));
       
       // Determinar estado
-      let estado = 'activo';
+      let estado = 'cancelado';
       if (row.estado_orden === 'cancelado') {
         estado = 'cancelado';
-      } else if (diasRestantes < 0) {
+      } else if (row.estado_arrenda === 7) {
+        estado = 'pendiente de aprobacion';      
+      } else if(row.estado_arrenda === 1){
+        estado = 'activo'
+      }else if (diasRestantes < 0) {
         estado = 'vencido';
       } else if (!row.fecha_fin_arrendamiento) {
         estado = 'finalizado';
       }
+
+      console.log( "estado: " + estado);
       
       // Calcular próximo pago (simplificado)
       let proximoPagoFecha = null;

@@ -15,7 +15,8 @@ router.post('/', verifyToken, async (req, res) => {
         iva,
         total,
         metodo_pago,
-        notas
+        notas,
+        estado_arrenda
     } = req.body;
 
     console.log("id usuario:" + usuario_id);
@@ -48,30 +49,30 @@ router.post('/', verifyToken, async (req, res) => {
             result = await client.query(
                 `INSERT INTO ventas (
                     numero_orden, cliente_id, direccion_envio_id,
-                    subtotal, descuento, envio, iva, total, metodo_pago, notas
-                ) VALUES (
-                    $1, $2, $3, $4,
-                    $5, $6, $7, $8, $9, $10
-                )
-                RETURNING *`,
-                [
-                    numero_orden, usuario_id, direccion_envio_id,
-                    subtotal, descuento, envio, iva, total, metodo_pago, notas || null
-                ]
-            );
-        } else {
-            result = await client.query(
-                `INSERT INTO ventas (
-                    numero_orden, cliente_id, direccion_envio_id, direccion_facturacion_id,
-                    subtotal, descuento, envio, iva, total, metodo_pago, notas
+                    subtotal, descuento, envio, iva, total, metodo_pago, notas,estado_arrenda
                 ) VALUES (
                     $1, $2, $3, $4,
                     $5, $6, $7, $8, $9, $10, $11
                 )
                 RETURNING *`,
                 [
+                    numero_orden, usuario_id, direccion_envio_id,
+                    subtotal, descuento, envio, iva, total, metodo_pago, notas, estado_arrenda || null
+                ]
+            );
+        } else {
+            result = await client.query(
+                `INSERT INTO ventas (
+                    numero_orden, cliente_id, direccion_envio_id, direccion_facturacion_id,
+                    subtotal, descuento, envio, iva, total, metodo_pago, notas, estado_arrenda
+                ) VALUES (
+                    $1, $2, $3, $4,
+                    $5, $6, $7, $8, $9, $10, $11,$12
+                )
+                RETURNING *`,
+                [
                     numero_orden, usuario_id, direccion_envio_id, direccion_facturacion_id,
-                    subtotal, descuento, envio, iva, total, metodo_pago, notas || null
+                    subtotal, descuento, envio, iva, total, metodo_pago, notas , estado_arrenda|| null
                 ]
             );
             
@@ -307,6 +308,49 @@ router.delete('/:id', verifyToken, async (req, res) => {
     );
 
     res.json({ message: "Venta eliminada correctamente." });
+});
+
+// Actualizar estado_arrenda 
+router.put('/:id/aprobar', verifyToken, authorizeAdmin, async (req, res) => {
+    const id = parseInt(req.params.id);
+    const { estado_arrenda } = req.body;
+
+    
+    if (!estado_arrenda ) {
+        return res.status(400).json({
+            success: false,
+            error: "Estado de arrenda inválido. Los estados permitidos son: " + estadosValidos.join(", ")
+        });
+    }
+
+    try {
+        const result = await db.query(
+            `UPDATE ventas
+             SET estado_arrenda = $1, fecha_actualizacion = CURRENT_TIMESTAMP
+             WHERE id = $2
+             RETURNING id, numero_orden, cliente_id, estado_arrenda, fecha_actualizacion`,
+            [estado_arrenda, id]
+        );
+
+        if (result.rows.length === 0) {
+            return res.status(404).json({
+                success: false,
+                error: "Venta no encontrada."
+            });
+        }
+
+        res.json({
+            success: true,
+            message: "Estado de arrenda actualizado exitosamente.",
+            venta: result.rows[0]
+        });
+    } catch (error) {
+        console.error("Error al actualizar estado de arrenda (admin):", error);
+        res.status(500).json({
+            success: false,
+            error: "Error interno del servidor al actualizar estado de arrenda."
+        });
+    }
 });
 
 // Obtener detalles de una venta específica
